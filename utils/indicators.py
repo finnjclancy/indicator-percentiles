@@ -33,6 +33,8 @@ def calculate_indicators(df):
     stoch = StochasticOscillator(high=high, low=low, close=close)
     df['Stoch_k'] = stoch.stoch()
     df['Stoch_d'] = stoch.stoch_signal()
+    # Calculate Stochastic Difference (K - D)
+    df['Stoch_diff'] = df['Stoch_k'] - df['Stoch_d']
     
     # Moving Averages
     # Simple Moving Averages

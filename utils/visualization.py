@@ -14,12 +14,14 @@ def create_statistical_distribution_plot(data, indicator_name, timeframe, save_d
     std = np.std(data)
     
     # Create figure with two subplots sharing x-axis
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[1, 2], sharex=True)
-    plt.subplots_adjust(hspace=0.05)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 10), height_ratios=[0.8, 2], sharex=True)
+    
+    # Increase spacing between subplots
+    plt.subplots_adjust(hspace=0.1)
     
     # Box plot (top)
     sns.boxplot(x=data, ax=ax1, color='lightcoral')
-    ax1.set_title(f'{indicator_name} Distribution ({timeframe})')
+    ax1.set_title(f'{indicator_name} Distribution ({timeframe})', pad=20)
     
     # Add IQR annotation
     q1, median, q3 = np.percentile(data, [25, 50, 75])
@@ -27,16 +29,16 @@ def create_statistical_distribution_plot(data, indicator_name, timeframe, save_d
     whisker_left = q1 - 1.5 * iqr
     whisker_right = q3 + 1.5 * iqr
     
-    # Add IQR text
+    # Add IQR text with adjusted position
     ax1.annotate('IQR', xy=((q1 + q3)/2, 0.8), xytext=((q1 + q3)/2, 1.2),
                  ha='center', va='center', arrowprops=dict(arrowstyle='<->'))
     
-    # Add Q1, Q3, and Median labels
+    # Add Q1, Q3, and Median labels with adjusted positions
     ax1.text(q1, 0.5, 'Q1', ha='center', va='bottom')
     ax1.text(q3, 0.5, 'Q3', ha='center', va='bottom')
     ax1.text(median, 0.5, 'Median', ha='center', va='top')
     
-    # Add whisker annotations
+    # Add whisker annotations with adjusted positions
     ax1.text(whisker_left, 0.8, 'Q1 - 1.5*IQR', ha='right', va='bottom')
     ax1.text(whisker_right, 0.8, 'Q3 + 1.5*IQR', ha='left', va='bottom')
     
@@ -44,38 +46,38 @@ def create_statistical_distribution_plot(data, indicator_name, timeframe, save_d
     ax1.set_yticks([])
     
     # Probability density plot (bottom)
-    x = np.linspace(mean - 4*std, mean + 4*std, 1000)
+    x = np.linspace(mean - 4*std, mean + 4*std, 2000)
     pdf = stats.norm.pdf(x, mean, std)
     
-    # Plot the PDF
-    ax2.plot(x, pdf, 'b-', lw=2)
+    # Plot the PDF with increased line width
+    ax2.plot(x, pdf, 'b-', lw=2.5)
     
-    # Fill areas for standard deviations
+    # Fill areas for standard deviations with adjusted colors and alpha
     std_ranges = [
         (-1, 1, 'lightcoral', '50%'),
         (-2, -1, 'lightblue', '24.65%'),
         (1, 2, 'lightblue', '24.65%'),
-        (-3, -2, 'lightblue', '0.35%'),
-        (2, 3, 'lightblue', '0.35%')
+        (-3, -2, 'lightgreen', '0.35%'),
+        (2, 3, 'lightgreen', '0.35%')
     ]
     
     for start, end, color, label in std_ranges:
         mask = (x >= mean + start*std) & (x <= mean + end*std)
-        ax2.fill_between(x[mask], pdf[mask], color=color, alpha=0.5)
+        ax2.fill_between(x[mask], pdf[mask], color=color, alpha=0.4)
         
-        # Add percentage labels
+        # Add percentage labels with adjusted position
         if start >= 0:
             x_pos = mean + (start + end)/2*std
-            ax2.text(x_pos, 0.02, label, ha='center')
+            ax2.text(x_pos, max(pdf[mask])/2, label, ha='center')
     
-    # Add standard deviation markers
+    # Add standard deviation markers with improved visibility
     for i in [-3, -2, -1, 0, 1, 2, 3]:
         x_pos = mean + i*std
-        ax2.axvline(x=x_pos, color='gray', linestyle='--', alpha=0.5)
+        ax2.axvline(x=x_pos, color='gray', linestyle='--', alpha=0.4)
         sigma_label = f"{i}σ" if i != 0 else "0σ"
         ax2.text(x_pos, -0.02, sigma_label, ha='center', va='top')
         
-        # Add specific sigma values
+        # Add specific sigma values with adjusted position
         if i in [-2.698, -0.6745, 0.6745, 2.698]:
             ax2.text(x_pos, pdf[np.abs(x - x_pos).argmin()], f'{i:.4f}σ',
                     ha='center', va='bottom')
@@ -83,15 +85,19 @@ def create_statistical_distribution_plot(data, indicator_name, timeframe, save_d
     ax2.set_xlabel(f'{indicator_name} Value')
     ax2.set_ylabel('Probability Density')
     
-    # Add current value marker
+    # Add current value marker with improved visibility
     current_value = data.iloc[-1]
     current_zscore = (current_value - mean) / std
     
     for ax in [ax1, ax2]:
-        ax.axvline(x=current_value, color='red', linestyle='-', label=f'Current: {current_value:.2f} ({current_zscore:.2f}σ)')
-        ax.legend()
+        ax.axvline(x=current_value, color='red', linestyle='-', linewidth=2,
+                  label=f'Current: {current_value:.2f} ({current_zscore:.2f}σ)')
+        ax.legend(loc='upper right')
     
-    # Save plot
+    # Ensure the plot uses the full width
+    plt.tight_layout()
+    
+    # Save plot with higher DPI for better quality
     plt.savefig(os.path.join(save_dir, f'{indicator_name}_statistical_distribution.png'),
                 bbox_inches='tight', dpi=300)
     plt.close()
@@ -300,4 +306,100 @@ def create_scatter_plots(df, indicator_name, timeframe, save_dir):
         plt.ylabel('Signal Line')
         plt.grid(True, alpha=0.3)
         plt.savefig(os.path.join(save_dir, f'MACD_scatter.png'))
-        plt.close() 
+        plt.close()
+
+def create_comprehensive_dashboard(df, timeframe, save_dir):
+    """Create a comprehensive dashboard showing price/ratio and all indicators with their percentiles."""
+    plt.style.use('default')
+    
+    # Create figure with subplots
+    fig = plt.figure(figsize=(20, 25))
+    gs = fig.add_gridspec(7, 1, height_ratios=[2, 1, 1, 1, 1, 1, 1])
+    
+    # 1. Price/Ratio Plot
+    ax1 = fig.add_subplot(gs[0])
+    ax1.plot(df.index, df['Close'], label='Price/Ratio', color='blue')
+    ax1.set_title(f'Price/Ratio ({timeframe})', pad=20)
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # 2. Bollinger Bands
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    ax2.plot(df.index, df['Close'], label='Price', color='blue', alpha=0.5)
+    ax2.plot(df.index, df['BB_high'], label='Upper BB', color='red', linestyle='--')
+    ax2.plot(df.index, df['BB_mid'], label='Middle BB', color='green', linestyle='--')
+    ax2.plot(df.index, df['BB_low'], label='Lower BB', color='red', linestyle='--')
+    ax2.set_title('Bollinger Bands', pad=20)
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    
+    # 3. MACD
+    ax3 = fig.add_subplot(gs[2], sharex=ax1)
+    ax3.plot(df.index, df['MACD'], label='MACD', color='blue')
+    ax3.plot(df.index, df['MACD_signal'], label='Signal', color='red')
+    ax3.bar(df.index, df['MACD_diff'], label='Histogram', color='green', alpha=0.3)
+    ax3.set_title('MACD', pad=20)
+    ax3.grid(True, alpha=0.3)
+    ax3.legend()
+    
+    # 4. RSI
+    ax4 = fig.add_subplot(gs[3], sharex=ax1)
+    ax4.plot(df.index, df['RSI'], label='RSI', color='purple')
+    ax4.axhline(y=70, color='red', linestyle='--', alpha=0.5)
+    ax4.axhline(y=30, color='green', linestyle='--', alpha=0.5)
+    ax4.set_title('RSI', pad=20)
+    ax4.grid(True, alpha=0.3)
+    ax4.legend()
+    
+    # 5. Stochastic
+    ax5 = fig.add_subplot(gs[4], sharex=ax1)
+    ax5.plot(df.index, df['Stoch_k'], label='%K', color='blue')
+    ax5.plot(df.index, df['Stoch_d'], label='%D', color='red')
+    ax5.axhline(y=80, color='red', linestyle='--', alpha=0.5)
+    ax5.axhline(y=20, color='green', linestyle='--', alpha=0.5)
+    ax5.set_title('Stochastic Oscillator', pad=20)
+    ax5.grid(True, alpha=0.3)
+    ax5.legend()
+    
+    # 6. Moving Averages
+    ax6 = fig.add_subplot(gs[5], sharex=ax1)
+    ax6.plot(df.index, df['Close'], label='Price', color='blue', alpha=0.5)
+    ax6.plot(df.index, df['SMA_20'], label='SMA 20', color='red')
+    ax6.plot(df.index, df['SMA_50'], label='SMA 50', color='green')
+    ax6.plot(df.index, df['SMA_200'], label='SMA 200', color='purple')
+    ax6.set_title('Moving Averages', pad=20)
+    ax6.grid(True, alpha=0.3)
+    ax6.legend()
+    
+    # 7. Percentile Summary
+    ax7 = fig.add_subplot(gs[6])
+    ax7.axis('off')
+    
+    # Calculate percentiles for each indicator
+    indicators = {
+        'RSI': df['RSI'],
+        'MACD': df['MACD'],
+        'BB Width': df['BB_width'],
+        'Stoch K': df['Stoch_k'],
+        'Stoch D': df['Stoch_d'],
+        'SMA 20': df['SMA_20'],
+        'SMA 50': df['SMA_50'],
+        'SMA 200': df['SMA_200']
+    }
+    
+    # Create percentile summary text
+    summary_text = "Current Percentiles:\n\n"
+    for name, data in indicators.items():
+        if not data.isna().all():
+            current_value = data.iloc[-1]
+            percentile = pd.Series(data).rank(pct=True).iloc[-1] * 100
+            summary_text += f"{name}: {current_value:.2f} ({percentile:.1f}%)\n"
+    
+    ax7.text(0.05, 0.95, summary_text, transform=ax7.transAxes, 
+             verticalalignment='top', fontfamily='monospace')
+    
+    # Adjust layout and save
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f'comprehensive_dashboard_{timeframe}.png'),
+                bbox_inches='tight', dpi=300)
+    plt.close() 
