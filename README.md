@@ -9,6 +9,7 @@ This tool helps traders and analysts understand:
 - When indicators are showing extreme readings
 - The volatility and trend characteristics of different timeframes
 - Relationships between different components of technical indicators
+- Spread and ratio analysis between two securities
 
 ## Features
 
@@ -39,6 +40,21 @@ This tool helps traders and analysts understand:
    - Multiple periods: 20, 50, 100, 200
    - Both Simple (SMA) and Exponential (EMA)
    - Helps identify different trend timeframes
+
+### Spread and Ratio Analysis
+
+The tool can analyze the relationship between two securities by:
+- Calculating the ratio between their prices
+- Identifying overlapping data periods
+- Applying all technical indicators to the ratio
+- Generating comprehensive visualizations of the relationship
+- Providing statistical analysis of the spread
+
+Common use cases:
+- GLD/SPY: Gold vs S&P 500 relationship
+- TLT/SPY: Bonds vs S&P 500 relationship
+- VIX/SPY: Volatility vs S&P 500 relationship
+- Any pair of securities for relative strength analysis
 
 ### Timeframes Analyzed
 
@@ -79,6 +95,12 @@ For each indicator and timeframe, the tool generates:
    - Stochastic %K vs %D
    - Price vs Bollinger Bands
 
+6. **Comprehensive Dashboard**
+   - Price/Ratio plot
+   - All indicators in one view
+   - Current percentile summary
+   - Multiple timeframe analysis
+
 ### Statistical Analysis
 
 For each indicator, the tool calculates:
@@ -101,12 +123,22 @@ For each indicator, the tool calculates:
 
 ## Usage
 
+### Single Security Analysis
 Run the script with a ticker symbol:
 ```bash
 python main.py AAPL
 ```
 
-Replace `AAPL` with any valid stock ticker symbol.
+### Spread/Ratio Analysis
+Run the script with two ticker symbols:
+```bash
+python main.py TICKER1 TICKER2
+```
+
+Example:
+```bash
+python main.py GLD SPY
+```
 
 ## Output Structure
 
@@ -125,6 +157,18 @@ TICKER/
 ├── BB/
 ├── Stochastic/
 └── MA/
+```
+
+For spread analysis, the structure is:
+```
+TICKER1_TICKER2_spread/
+├── 1H/
+│   ├── comprehensive_dashboard_1H.png
+│   ├── spread_ratio.csv
+│   └── [indicator folders]
+├── 1D/
+├── 1W/
+└── 1M/
 ```
 
 Each indicator's data directory contains:
@@ -180,9 +224,17 @@ Relationship plots reveal:
 - Extreme value identification
 - Signal confirmation points
 
+### Spread Analysis
+The comprehensive dashboard shows:
+- Price/ratio relationship over time
+- All technical indicators applied to the ratio
+- Current percentile rankings
+- Multiple timeframe context
+
 ## Notes
 
 - Monthly timeframe may have limited data for longer-period indicators (e.g., 200 MA)
 - Statistical significance improves with more historical data
 - Consider multiple timeframes for comprehensive analysis
 - Use in conjunction with other analysis tools for best results
+- For spread analysis, ensure both securities have sufficient overlapping data
