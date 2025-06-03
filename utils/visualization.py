@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import numpy as np
 from scipy import stats
+import matplotlib.gridspec as gridspec
 
 def create_statistical_distribution_plot(data, indicator_name, timeframe, save_dir):
     """Create a statistical distribution plot with box plot and probability density."""
@@ -103,40 +104,77 @@ def create_statistical_distribution_plot(data, indicator_name, timeframe, save_d
     plt.close()
 
 def create_distribution_plots(data, indicator_name, timeframe, save_dir):
-    """Create and save distribution plots for the indicator."""
-    # Create the directory if it doesn't exist
-    os.makedirs(save_dir, exist_ok=True)
+    """Create and save distribution plots for an indicator."""
+    # Check for valid data
+    if data is None or len(data) == 0 or data.isna().all():
+        print(f"Warning: No valid data for {indicator_name} in {timeframe} timeframe")
+        return
     
-    # Set style
-    plt.style.use('default')
-    sns.set_theme()
+    # Clean data
+    clean_data = data.dropna()
+    if len(clean_data) == 0:
+        print(f"Warning: No valid data after cleaning for {indicator_name} in {timeframe} timeframe")
+        return
     
-    # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-    
-    # Plot 1: Distribution plot (Bell curve)
-    sns.histplot(data=data, kde=True, ax=ax1)
-    ax1.set_title(f'{indicator_name} Distribution ({timeframe})')
-    ax1.set_xlabel(indicator_name)
-    ax1.set_ylabel('Frequency')
-    
-    # Add current value line
-    current_value = data.iloc[-1]
-    ax1.axvline(x=current_value, color='r', linestyle='--', label='Current Value')
-    ax1.legend()
-    
-    # Plot 2: Box plot
-    sns.boxplot(y=data, ax=ax2)
-    ax2.set_title(f'{indicator_name} Box Plot ({timeframe})')
-    
-    # Add current value point
-    ax2.plot(0, current_value, 'ro', label='Current Value')
-    ax2.legend()
-    
-    # Adjust layout and save
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, f'{indicator_name}_distribution.png'))
-    plt.close()
+    try:
+        # Create figure with subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), height_ratios=[2, 1])
+        
+        # Top plot: Histogram with KDE
+        sns.histplot(data=clean_data, kde=True, ax=ax1)
+        
+        # Calculate statistics
+        current_value = clean_data.iloc[-1]
+        current_percentile = pd.Series(clean_data).rank(pct=True).iloc[-1] * 100
+        mean = clean_data.mean()
+        std = clean_data.std()
+        
+        # Add reference lines
+        ax1.axvline(x=current_value, color='red', linestyle='-', 
+                    label=f'Current: {current_value:.2f} ({current_percentile:.1f}%ile)')
+        ax1.axvline(x=mean, color='black', linestyle='-', 
+                    label=f'Mean: {mean:.2f}')
+        ax1.axvline(x=mean + std, color='gray', linestyle=':', 
+                    label=f'+1σ: {(mean + std):.2f}')
+        ax1.axvline(x=mean - std, color='gray', linestyle=':', 
+                    label=f'-1σ: {(mean - std):.2f}')
+        
+        # Add percentile lines
+        percentiles = {
+            '5th': np.percentile(clean_data, 5),
+            '25th': np.percentile(clean_data, 25),
+            '50th': np.percentile(clean_data, 50),
+            '75th': np.percentile(clean_data, 75),
+            '95th': np.percentile(clean_data, 95)
+        }
+        
+        colors = ['blue', 'green', 'purple', 'orange', 'red']
+        for (label, value), color in zip(percentiles.items(), colors):
+            ax1.axvline(x=value, color=color, linestyle='--', 
+                       label=f'{label}: {value:.2f}')
+        
+        ax1.set_title(f'{indicator_name} Distribution ({timeframe})')
+        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        
+        # Bottom plot: Box plot
+        sns.boxplot(data=clean_data, ax=ax2)
+        ax2.axvline(x=current_value, color='red', linestyle='-')
+        
+        # Adjust layout and save
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, f'{indicator_name}_distribution.png'), 
+                    bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        # Create time series plot
+        create_time_series_plot(clean_data, indicator_name, timeframe, save_dir)
+        
+        # Create statistical distribution plot
+        create_statistical_distribution_plot(clean_data, indicator_name, timeframe, save_dir)
+        
+    except Exception as e:
+        print(f"Warning: Error creating plots for {indicator_name} in {timeframe} timeframe: {str(e)}")
+        plt.close('all')  # Clean up any open figures
 
 def create_percentile_distribution_plot(data, indicator_name, timeframe, save_dir):
     """Create and save distribution plot with percentile markers."""
@@ -179,69 +217,98 @@ def create_percentile_distribution_plot(data, indicator_name, timeframe, save_di
                 bbox_inches='tight')
     plt.close()
 
-def create_time_series_plot(data, dates, indicator_name, timeframe, save_dir):
-    """Create and save time series plot of the indicator."""
-    plt.style.use('default')
-    sns.set_theme()
-    
-    # Create figure
-    plt.figure(figsize=(15, 7))
-    
-    # Plot time series
-    plt.plot(dates, data, label='Value', color='blue')
-    
-    # Calculate and plot moving average
-    ma_period = min(50, len(data) // 4)  # Use shorter period for shorter timeframes
-    if len(data) > ma_period:
-        ma = data.rolling(window=ma_period).mean()
-        plt.plot(dates, ma, label=f'{ma_period}-period MA', color='red', linestyle='--')
-    
-    # Calculate percentiles for horizontal lines
-    percentiles = {
-        'Q1 (25%)': np.percentile(data, 25),
-        'Median': np.percentile(data, 50),
-        'Q3 (75%)': np.percentile(data, 75)
-    }
-    
-    # Add percentile lines
-    colors = ['green', 'purple', 'orange']
-    for (label, value), color in zip(percentiles.items(), colors):
-        plt.axhline(y=value, color=color, linestyle=':', label=f'{label}: {value:.2f}')
-    
-    plt.title(f'{indicator_name} Time Series ({timeframe})')
-    plt.xlabel('Date')
-    plt.ylabel(indicator_name)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    
-    # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45)
-    
-    # Adjust layout and save
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, f'{indicator_name}_time_series.png'),
-                bbox_inches='tight')
-    plt.close()
+def create_time_series_plot(data, indicator_name, timeframe, save_dir):
+    """Create and save a time series plot for an indicator."""
+    try:
+        plt.figure(figsize=(12, 6))
+        
+        # Plot time series
+        plt.plot(data.index, data.values, label=indicator_name)
+        
+        # Add current value marker
+        current_value = data.iloc[-1]
+        plt.plot(data.index[-1], current_value, 'ro', 
+                 label=f'Current: {current_value:.2f}')
+        
+        # Add mean and standard deviation bands
+        mean = data.mean()
+        std = data.std()
+        plt.axhline(y=mean, color='black', linestyle='-', 
+                    label=f'Mean: {mean:.2f}')
+        plt.axhline(y=mean + std, color='gray', linestyle=':', 
+                    label=f'+1σ: {(mean + std):.2f}')
+        plt.axhline(y=mean - std, color='gray', linestyle=':', 
+                    label=f'-1σ: {(mean - std):.2f}')
+        
+        plt.title(f'{indicator_name} Time Series ({timeframe})')
+        plt.xlabel('Date')
+        plt.ylabel(indicator_name)
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True)
+        
+        # Rotate x-axis labels for better readability
+        plt.xticks(rotation=45)
+        
+        # Save plot
+        plt.savefig(os.path.join(save_dir, f'{indicator_name}_time_series.png'), 
+                    bbox_inches='tight', dpi=300)
+        plt.close()
+        
+    except Exception as e:
+        print(f"Warning: Error creating time series plot for {indicator_name} in {timeframe} timeframe: {str(e)}")
+        plt.close('all')
 
-def save_statistics_csv(stats, save_path):
-    """Save statistics to a CSV file."""
-    # Convert stats dictionary to a DataFrame
-    df_stats = pd.DataFrame({
-        'Metric': ['Current Value', 'Current Percentile', 'Bottom 5%', 'Q1 (25%)', 
-                  'Median (50%)', 'Q3 (75%)', 'Top 5%'],
-        'Value': [
-            stats['current_value'],
-            stats['current_percentile'],
-            stats['percentiles']['bottom_5'],
-            stats['percentiles']['q1'],
-            stats['percentiles']['median'],
-            stats['percentiles']['q3'],
-            stats['percentiles']['top_5']
-        ]
-    })
-    
-    # Save to CSV
-    df_stats.to_csv(save_path, index=False)
+def save_statistics_csv(series, indicator_name, timeframe, save_dir):
+    """Save statistical information about an indicator to a CSV file."""
+    try:
+        # Check for valid data
+        if series is None or len(series) == 0 or series.isna().all():
+            print(f"Warning: No valid data for statistics of {indicator_name} in {timeframe} timeframe")
+            return
+        
+        # Clean data
+        clean_series = series.dropna()
+        if len(clean_series) == 0:
+            print(f"Warning: No valid data after cleaning for statistics of {indicator_name} in {timeframe} timeframe")
+            return
+        
+        stats = {
+            'Metric': [
+                'Current Value',
+                'Mean',
+                'Median',
+                'Standard Deviation',
+                'Minimum',
+                'Maximum',
+                '5th Percentile',
+                '25th Percentile',
+                '75th Percentile',
+                '95th Percentile',
+                'Current Percentile'
+            ],
+            'Value': [
+                clean_series.iloc[-1],
+                clean_series.mean(),
+                clean_series.median(),
+                clean_series.std(),
+                clean_series.min(),
+                clean_series.max(),
+                np.percentile(clean_series, 5),
+                np.percentile(clean_series, 25),
+                np.percentile(clean_series, 75),
+                np.percentile(clean_series, 95),
+                pd.Series(clean_series).rank(pct=True).iloc[-1] * 100
+            ]
+        }
+        
+        df = pd.DataFrame(stats)
+        output_file = os.path.join(save_dir, f'{indicator_name}_statistics.csv')
+        df.to_csv(output_file, index=False)
+        return output_file
+        
+    except Exception as e:
+        print(f"Warning: Error saving statistics for {indicator_name} in {timeframe} timeframe: {str(e)}")
+        return None
 
 def create_scatter_plots(df, indicator_name, timeframe, save_dir):
     """Create scatter plots for specific technical indicators."""
@@ -309,97 +376,183 @@ def create_scatter_plots(df, indicator_name, timeframe, save_dir):
         plt.close()
 
 def create_comprehensive_dashboard(df, timeframe, save_dir):
-    """Create a comprehensive dashboard showing price/ratio and all indicators with their percentiles."""
+    """Create a comprehensive dashboard for a timeframe."""
+    try:
+        # Create figure with multiple subplots
+        fig = plt.figure(figsize=(15, 20))
+        gs = gridspec.GridSpec(4, 2, height_ratios=[2, 1, 1, 1])
+        
+        # Price and Bollinger Bands
+        ax1 = plt.subplot(gs[0, :])
+        ax1.plot(df.index, df['Close'], label='Price', color='blue')
+        if 'BB_upper' in df.columns and 'BB_lower' in df.columns:
+            ax1.plot(df.index, df['BB_upper'], label='Upper BB', color='red', linestyle='--')
+            ax1.plot(df.index, df['BB_lower'], label='Lower BB', color='red', linestyle='--')
+        ax1.set_title(f'Price and Bollinger Bands ({timeframe})')
+        ax1.legend()
+        ax1.grid(True)
+        
+        # RSI
+        ax2 = plt.subplot(gs[1, 0])
+        if 'RSI' in df.columns:
+            ax2.plot(df.index, df['RSI'], label='RSI', color='purple')
+            ax2.axhline(y=70, color='red', linestyle='--')
+            ax2.axhline(y=30, color='green', linestyle='--')
+        ax2.set_title('RSI')
+        ax2.legend()
+        ax2.grid(True)
+        
+        # MACD
+        ax3 = plt.subplot(gs[1, 1])
+        if all(x in df.columns for x in ['MACD', 'MACD_signal', 'MACD_diff']):
+            ax3.plot(df.index, df['MACD'], label='MACD', color='blue')
+            ax3.plot(df.index, df['MACD_signal'], label='Signal', color='orange')
+            ax3.bar(df.index, df['MACD_diff'], label='Histogram', color='gray', alpha=0.3)
+        ax3.set_title('MACD')
+        ax3.legend()
+        ax3.grid(True)
+        
+        # Stochastic
+        ax4 = plt.subplot(gs[2, 0])
+        if all(x in df.columns for x in ['Stoch_k', 'Stoch_d']):
+            ax4.plot(df.index, df['Stoch_k'], label='%K', color='blue')
+            ax4.plot(df.index, df['Stoch_d'], label='%D', color='red')
+            ax4.axhline(y=80, color='red', linestyle='--')
+            ax4.axhline(y=20, color='green', linestyle='--')
+        ax4.set_title('Stochastic')
+        ax4.legend()
+        ax4.grid(True)
+        
+        # Bollinger Band Width
+        ax5 = plt.subplot(gs[2, 1])
+        if 'BB_width' in df.columns:
+            ax5.plot(df.index, df['BB_width'], label='BB Width', color='green')
+        ax5.set_title('Bollinger Band Width')
+        ax5.legend()
+        ax5.grid(True)
+        
+        # Moving Averages
+        ax6 = plt.subplot(gs[3, :])
+        ax6.plot(df.index, df['Close'], label='Price', color='black', alpha=0.5)
+        for ma in [20, 50, 100, 200]:
+            col = f'SMA_{ma}'
+            if col in df.columns:
+                ax6.plot(df.index, df[col], label=f'{ma} SMA')
+        ax6.set_title('Moving Averages')
+        ax6.legend()
+        ax6.grid(True)
+        
+        # Adjust layout and save
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, 'comprehensive_dashboard.png'), 
+                   bbox_inches='tight', dpi=300)
+        plt.close()
+        
+    except Exception as e:
+        print(f"Warning: Error creating comprehensive dashboard for {timeframe} timeframe: {str(e)}")
+        plt.close('all')
+
+def create_timeframe_summary_page(df, timeframe, save_dir):
+    """Create a summary page for each timeframe with specific indicator distributions."""
     plt.style.use('default')
     
-    # Create figure with subplots
-    fig = plt.figure(figsize=(20, 25))
-    gs = fig.add_gridspec(7, 1, height_ratios=[2, 1, 1, 1, 1, 1, 1])
+    # Count how many indicators we'll actually plot
+    num_indicators = 0
+    indicators_to_plot = [
+        ('BB_width', 'Bollinger Band Width'),
+        ('RSI', 'RSI'),
+        ('Stoch_diff', 'Stochastic Difference'),
+        ('MACD_diff', 'MACD Histogram'),
+        ('Stoch_k', 'Stochastic K (Absolute)'),
+        ('Stoch_d', 'Stochastic D (Absolute)')
+    ]
     
-    # 1. Price/Ratio Plot
-    ax1 = fig.add_subplot(gs[0])
-    ax1.plot(df.index, df['Close'], label='Price/Ratio', color='blue')
-    ax1.set_title(f'Price/Ratio ({timeframe})', pad=20)
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
+    # Calculate MA distances
+    ma_distances = pd.DataFrame(index=df.index)
+    for ma in ['SMA_20', 'SMA_50', 'SMA_100', 'SMA_200']:
+        if ma in df.columns:
+            ma_distances[f'{ma}_dist'] = ((df['Close'] - df[ma]) / df[ma]) * 100
+            indicators_to_plot.append((f'{ma}_dist', f'Distance from {ma} (%)'))
     
-    # 2. Bollinger Bands
-    ax2 = fig.add_subplot(gs[1], sharex=ax1)
-    ax2.plot(df.index, df['Close'], label='Price', color='blue', alpha=0.5)
-    ax2.plot(df.index, df['BB_high'], label='Upper BB', color='red', linestyle='--')
-    ax2.plot(df.index, df['BB_mid'], label='Middle BB', color='green', linestyle='--')
-    ax2.plot(df.index, df['BB_low'], label='Lower BB', color='red', linestyle='--')
-    ax2.set_title('Bollinger Bands', pad=20)
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
+    # Count valid indicators
+    for indicator, _ in indicators_to_plot:
+        if indicator in df.columns or indicator in ma_distances.columns:
+            num_indicators += 1
     
-    # 3. MACD
-    ax3 = fig.add_subplot(gs[2], sharex=ax1)
-    ax3.plot(df.index, df['MACD'], label='MACD', color='blue')
-    ax3.plot(df.index, df['MACD_signal'], label='Signal', color='red')
-    ax3.bar(df.index, df['MACD_diff'], label='Histogram', color='green', alpha=0.3)
-    ax3.set_title('MACD', pad=20)
-    ax3.grid(True, alpha=0.3)
-    ax3.legend()
+    # Create figure with subplots - now just one column
+    fig = plt.figure(figsize=(15, 5 * num_indicators))
+    gs = fig.add_gridspec(num_indicators, 1, hspace=0.4)
     
-    # 4. RSI
-    ax4 = fig.add_subplot(gs[3], sharex=ax1)
-    ax4.plot(df.index, df['RSI'], label='RSI', color='purple')
-    ax4.axhline(y=70, color='red', linestyle='--', alpha=0.5)
-    ax4.axhline(y=30, color='green', linestyle='--', alpha=0.5)
-    ax4.set_title('RSI', pad=20)
-    ax4.grid(True, alpha=0.3)
-    ax4.legend()
+    # Track the current subplot index
+    current_idx = 0
     
-    # 5. Stochastic
-    ax5 = fig.add_subplot(gs[4], sharex=ax1)
-    ax5.plot(df.index, df['Stoch_k'], label='%K', color='blue')
-    ax5.plot(df.index, df['Stoch_d'], label='%D', color='red')
-    ax5.axhline(y=80, color='red', linestyle='--', alpha=0.5)
-    ax5.axhline(y=20, color='green', linestyle='--', alpha=0.5)
-    ax5.set_title('Stochastic Oscillator', pad=20)
-    ax5.grid(True, alpha=0.3)
-    ax5.legend()
-    
-    # 6. Moving Averages
-    ax6 = fig.add_subplot(gs[5], sharex=ax1)
-    ax6.plot(df.index, df['Close'], label='Price', color='blue', alpha=0.5)
-    ax6.plot(df.index, df['SMA_20'], label='SMA 20', color='red')
-    ax6.plot(df.index, df['SMA_50'], label='SMA 50', color='green')
-    ax6.plot(df.index, df['SMA_200'], label='SMA 200', color='purple')
-    ax6.set_title('Moving Averages', pad=20)
-    ax6.grid(True, alpha=0.3)
-    ax6.legend()
-    
-    # 7. Percentile Summary
-    ax7 = fig.add_subplot(gs[6])
-    ax7.axis('off')
-    
-    # Calculate percentiles for each indicator
-    indicators = {
-        'RSI': df['RSI'],
-        'MACD': df['MACD'],
-        'BB Width': df['BB_width'],
-        'Stoch K': df['Stoch_k'],
-        'Stoch D': df['Stoch_d'],
-        'SMA 20': df['SMA_20'],
-        'SMA 50': df['SMA_50'],
-        'SMA 200': df['SMA_200']
-    }
-    
-    # Create percentile summary text
-    summary_text = "Current Percentiles:\n\n"
-    for name, data in indicators.items():
-        if not data.isna().all():
+    # Create subplots for each indicator
+    for indicator, title in indicators_to_plot:
+        if indicator in df.columns or indicator in ma_distances.columns:
+            # Get the data
+            if indicator in df.columns:
+                data = df[indicator].dropna()
+            else:
+                data = ma_distances[indicator].dropna()
+            
+            if len(data) == 0:
+                continue
+            
+            # Create distribution plot
+            ax = fig.add_subplot(gs[current_idx])
+            current_idx += 1
+            
+            # Create distribution plot with actual values
+            sns.histplot(data=data, kde=True, ax=ax)
+            
+            # Calculate percentiles and current value
             current_value = data.iloc[-1]
-            percentile = pd.Series(data).rank(pct=True).iloc[-1] * 100
-            summary_text += f"{name}: {current_value:.2f} ({percentile:.1f}%)\n"
+            current_percentile = pd.Series(data).rank(pct=True).iloc[-1] * 100
+            percentiles = {
+                '5th': np.percentile(data, 5),
+                '25th': np.percentile(data, 25),
+                '50th': np.percentile(data, 50),
+                '75th': np.percentile(data, 75),
+                '95th': np.percentile(data, 95)
+            }
+            
+            # Add percentile lines with labels
+            colors = ['blue', 'green', 'purple', 'orange', 'red']
+            for (label, value), color in zip(percentiles.items(), colors):
+                ax.axvline(x=value, color=color, linestyle='--', 
+                          label=f'{label}: {value:.2f}')
+            
+            # Add current value line
+            ax.axvline(x=current_value, color='black', linestyle='-', 
+                      label=f'Current: {current_value:.2f} ({current_percentile:.1f}%ile)')
+            
+            ax.set_title(f'{title} Distribution ({timeframe})')
+            ax.set_xlabel(title)
+            ax.set_ylabel('Frequency')
+            
+            # Add statistics text to the right of the plot
+            stats_text = (f'Current: {current_value:.2f}\n'
+                        f'Percentile: {current_percentile:.1f}%\n'
+                        f'Mean: {data.mean():.2f}\n'
+                        f'Std: {data.std():.2f}\n'
+                        f'5th: {percentiles["5th"]:.2f}\n'
+                        f'25th: {percentiles["25th"]:.2f}\n'
+                        f'50th: {percentiles["50th"]:.2f}\n'
+                        f'75th: {percentiles["75th"]:.2f}\n'
+                        f'95th: {percentiles["95th"]:.2f}')
+            
+            # Adjust plot size to make room for text and legend
+            box_pos = ax.get_position()
+            ax.set_position([box_pos.x0, box_pos.y0, box_pos.width * 0.75, box_pos.height])
+            
+            # Add text and legend
+            ax.text(1.05, 0.95, stats_text, transform=ax.transAxes,
+                   verticalalignment='top', fontsize=8)
+            ax.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', fontsize=8)
     
-    ax7.text(0.05, 0.95, summary_text, transform=ax7.transAxes, 
-             verticalalignment='top', fontfamily='monospace')
+    plt.suptitle(f'Indicator Summary - {timeframe} Timeframe', y=0.95, fontsize=16)
     
-    # Adjust layout and save
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, f'comprehensive_dashboard_{timeframe}.png'),
-                bbox_inches='tight', dpi=300)
+    # Save the summary page
+    summary_file = os.path.join(save_dir, f'timeframe_summary_{timeframe}.png')
+    plt.savefig(summary_file, bbox_inches='tight', dpi=300)
     plt.close() 
